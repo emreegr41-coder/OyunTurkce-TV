@@ -16,36 +16,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Extract project ZIP
-        run: |
-          ZIP_FILE=$(find . -maxdepth 1 -type f -iname '*.zip' | head -1)
-          if [ -z "$ZIP_FILE" ]; then
-            echo "HATA: Proje ZIP dosyası bulunamadı."
-            exit 1
-          fi
-          mkdir extracted
-          unzip -o "$ZIP_FILE" -d extracted
-          find extracted -maxdepth 4 \( -name settings.gradle -o -name settings.gradle.kts -o -name build.gradle -o -name build.gradle.kts -o -name gradlew \) -print
-
-      - name: Build APK
-        run: |
-          BUILD_FILE=$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts -o -name build.gradle -o -name build.gradle.kts \) | head -1)
-          if [ -z "$BUILD_FILE" ]; then
-            echo "HATA: ZIP içinde Gradle proje dosyası bulunamadı. Proje Android Gradle projesi olmayabilir."
-            exit 1
-          fi
-          PROJECT_DIR=$(dirname "$BUILD_FILE")
-          cd "$PROJECT_DIR"
-          if [ -f ./gradlew ]; then
-            chmod +x ./gradlew
-            ./gradlew assembleDebug
-          else
-            gradle assembleDebug
-          fi
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
