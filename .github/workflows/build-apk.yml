@@ -3,23 +3,106 @@ name: Build OyunTurkce APK
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Download source
         uses: actions/checkout@v5
 
-      - name: Set up JDK
+      - name: Set up Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-          - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+
+      - name: Find and extract project ZIP
+        shell: bash
+        run: |
+          set -e
+
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname '*.zip' -print -quit)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "::error::ZIP dosyası depo ana dizininde bulunamadı."
+            exit 1
+          fi
+
+          echo "Bulunan ZIP: $ZIP_FILE"
+
+          mkdir -p extracted
+          unzip -o "$ZIP_FILE" -d extracted
+
+          echo "ZIP içindeki dosyalar:"
+          find extracted -maxdepth 4 -type f | head -200
+
+      - name: Locate Android Gradle project
+        shell: bash
+        run: |
+          set -e
+
+          SETTINGS_FILE=$(find extracted -type f \
+            \( -name settings.gradle -o -name settings.gradle.kts \) \
+            -print -quit)
+
+          if [ -n "$SETTINGS_FILE" ]; then
+            PROJECT_DIR=$(dirname "$SETTINGS_FILE")
+          else
+            BUILD_FILE=$(find extracted -maxdepth 4 -type f \
+              \( -name build.gradle -o -name build.gradle.kts \) \
+              -print -quit)
+
+            if [ -z "$BUILD_FILE" ]; then
+              echo "::error::ZIP içinde Android Gradle proje dosyası bulunamadı."
+              echo "Bu ZIP bir web projesi olabilir; Android uygulama projesine dönüştürülmesi gerekebilir."
+              exit 1
+            fi
+
+            PROJECT_DIR=$(dirname "$BUILD_FILE")
+          fi
+
+          echo "Proje klasörü: $PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set -e
+          cd "$PROJECT_DIR"
+
+          if [ -f gradlew ]; then
+            chmod +x gradlew
+            ./gradlew --no-daemon assembleDebug
+          else
+            gradle --no-daemon assembleDebug
+          fi
+
+      - name: Find generated APK
+        shell: bash
+        run: |
+          find extracted -type f -name '*.apk' -print
+
+          if ! find extracted -type f -path '*/build/outputs/apk/debug/*.apk' \
+            | grep -q .; then
+            echo "::error::Debug APK bulunamadı."
+            exit 1
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
