@@ -79,7 +79,38 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+- name: Create missing launcher icons
+        shell: bash
+        run: |
+          RES="extracted/android/app/src/main/res"
 
+          mkdir -p "$RES/mipmap-mdpi"
+          mkdir -p "$RES/mipmap-hdpi"
+          mkdir -p "$RES/mipmap-xhdpi"
+          mkdir -p "$RES/mipmap-xxhdpi"
+          mkdir -p "$RES/mipmap-xxxhdpi"
+
+          for DENSITY in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p "$RES/mipmap-$DENSITY"
+
+            cat > "$RES/mipmap-$DENSITY/ic_launcher.xml" <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="48dp"
+              android:height="48dp"
+              android:viewportWidth="48"
+              android:viewportHeight="48">
+              <path android:fillColor="#1565C0"
+                  android:pathData="M0,0h48v48h-48z"/>
+              <path android:fillColor="#FFFFFF"
+                  android:pathData="M8,12h32v24h-32z"/>
+              <path android:fillColor="#1565C0"
+                  android:pathData="M12,17h24v3h-24zM12,23h18v3h-18zM12,29h20v3h-20z"/>
+          </vector>
+          EOF
+
+            cp "$RES/mipmap-$DENSITY/ic_launcher.xml" \
+               "$RES/mipmap-$DENSITY/ic_launcher_round.xml"
+          done
       - name: Build APK
         shell: bash
         run: |
