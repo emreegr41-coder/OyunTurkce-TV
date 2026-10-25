@@ -41,24 +41,19 @@ jobs:
 
           if [ -z "$ZIP_FILE" ]; then
             echo "HATA: Depo ana dizininde ZIP dosyası bulunamadı."
-            echo "OyunTurkce.zip dosyasını deponun ana dizinine yükle."
             exit 1
           fi
 
           echo "Bulunan ZIP: $ZIP_FILE"
-
           mkdir -p extracted
           unzip -q "$ZIP_FILE" -d extracted
-
-          echo "ZIP içeriği:"
-          find extracted -maxdepth 4 -type f | head -100
 
       - name: Locate Android project
         shell: bash
         run: |
           set -euo pipefail
 
-          GRADLE_FILE="$(find extracted -type f -name settings.gradle -o -name settings.gradle.kts | head -1 || true)"
+          GRADLE_FILE="$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)"
 
           if [ -z "$GRADLE_FILE" ]; then
             echo "HATA: ZIP içinde Gradle Android projesi bulunamadı."
@@ -67,13 +62,13 @@ jobs:
 
           PROJECT_DIR="$(dirname "$GRADLE_FILE")"
 
-          echo "Android projesi: $PROJECT_DIR"
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
           if [ ! -d "$PROJECT_DIR/app" ]; then
             echo "HATA: Android projesinde app klasörü bulunamadı."
             exit 1
           fi
+
+          echo "Android projesi: $PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Create missing launcher icons
         shell: bash
@@ -81,8 +76,6 @@ jobs:
           set -euo pipefail
 
           RES="$PROJECT_DIR/app/src/main/res"
-
-          mkdir -p "$RES"
 
           for DENSITY in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p "$RES/mipmap-$DENSITY"
@@ -109,9 +102,39 @@ jobs:
                "$RES/mipmap-$DENSITY/ic_launcher_round.xml"
           done
 
-          echo "Eksik uygulama simgeleri oluşturuldu."
+          echo "Uygulama simgeleri oluşturuldu."
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.
+          gradle-version: '8.9'
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          gradle --no-daemon assembleDebug
+
+      - name: Find generated APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APK_FILE="$(find "$PROJECT_DIR/app/build/outputs/apk/debug" -type f -name '*.apk' -print -quit)"
+
+          if [ -z "$APK_FILE" ]; then
+            echo "HATA: APK oluşturulamadı."
+            exit 1
+          fi
+
+          echo "APK_FILE=$APK_FILE" >> "$GITHUB_ENV"
+          echo "APK hazır: $APK_FILE"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: OyunTurkce-APK
+          path: ${{ env.APK_FILE }}
+          if-no-files-found: error
+          retention-days: 7
